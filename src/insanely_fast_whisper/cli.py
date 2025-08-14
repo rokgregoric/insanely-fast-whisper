@@ -107,6 +107,20 @@ parser.add_argument(
     type=int,
     help="Defines the maximum number of speakers that the system should consider in diarization. Must be at least 1. Cannot be used together with --num-speakers. Must be greater than or equal to --min-speakers if both are specified. (default: None)",
 )
+parser.add_argument(
+    "--min-duration-on",
+    required=False,
+    default=0.5,
+    type=float,
+    help="Minimum duration for a speaker segment in seconds. Segments shorter than this will be filtered out. (default: 0.5)",
+)
+parser.add_argument(
+    "--min-duration-off",
+    required=False,
+    default=0.1,
+    type=float,
+    help="Minimum gap between same speaker segments in seconds. Segments from the same speaker closer than this will be merged. (default: 0.1)",
+)
 
 def main():
     args = parser.parse_args()

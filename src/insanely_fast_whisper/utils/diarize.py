@@ -58,13 +58,55 @@ def preprocess_inputs(inputs):
     return inputs, diarizer_inputs
 
 
-def diarize_audio(diarizer_inputs, diarization_pipeline, num_speakers, min_speakers, max_speakers):
+def diarize_audio(diarizer_inputs, diarization_pipeline, num_speakers, min_speakers, max_speakers, min_duration_on=0.5, min_duration_off=0.1):
     diarization = diarization_pipeline(
         {"waveform": diarizer_inputs, "sample_rate": 16000},
         num_speakers=num_speakers,
         min_speakers=min_speakers,
         max_speakers=max_speakers,
     )
+
+    # Apply post-processing filters to reduce over-segmentation (like diarize.py)
+    from pyannote.core import Annotation, Segment
+    
+    # Filter out very short segments
+    filtered_diarization = Annotation()
+    for segment, _, speaker in diarization.itertracks(yield_label=True):
+        if segment.duration >= min_duration_on:
+            filtered_diarization[segment] = speaker
+    
+    # Merge segments from same speaker that are close together
+    merged_diarization = Annotation()
+    current_speaker = None
+    current_start = None
+    current_end = None
+    
+    for segment, _, speaker in filtered_diarization.itertracks(yield_label=True):
+        if current_speaker == speaker and current_end is not None:
+            # Check if gap is small enough to merge
+            gap = segment.start - current_end
+            if gap <= min_duration_off:
+                # Extend current segment
+                current_end = segment.end
+                continue
+        
+        # Save previous segment if exists
+        if current_speaker is not None and current_start is not None:
+            merged_segment = Segment(current_start, current_end)
+            merged_diarization[merged_segment] = current_speaker
+        
+        # Start new segment
+        current_speaker = speaker
+        current_start = segment.start
+        current_end = segment.end
+    
+    # Add final segment
+    if current_speaker is not None and current_start is not None:
+        merged_segment = Segment(current_start, current_end)
+        merged_diarization[merged_segment] = current_speaker
+    
+    # Use the processed diarization
+    diarization = merged_diarization
 
     segments = []
     for segment, track, label in diarization.itertracks(yield_label=True):
